@@ -1,0 +1,127 @@
+#!/bin/sh
+# A stand-in for op, 1Password's command-line tool, for the tests: it
+# answers as op does, from the two vaults below, and writes down how it
+# was called in $FAKE_OP_LOG, and what it was handed in $FAKE_OP_STDIN.
+# $FAKE_OP_MODE is no-account (op knows none), locked (op is to be
+# signed in), or password (op signs in with the password "correct
+# horse", printing a session token).
+
+# This file is part of lispm-1password, under the GNU AGPL, version 3 or
+# later.  SPDX-License-Identifier: AGPL-3.0-or-later
+
+[ -n "$FAKE_OP_LOG" ] && printf '%s\n' "$*" >> "$FAKE_OP_LOG"
+
+locked () {
+    echo '[ERROR] 2026/10/21 12:00:00 you are not currently signed in. Please run `op signin --help` for instructions' >&2
+    exit 1
+}
+
+signed_in () {
+    case "$FAKE_OP_MODE" in
+        locked) locked ;;
+        password) case "$*" in *"--session TOKENtokenTOKENtoken123"*) ;; *) locked ;; esac ;;
+    esac
+}
+
+item_one () {
+    cat <<EOF
+{"id":"ITEM1","title":"GitHub","version":4,"vault":{"id":"VAULT1","name":"Personal"},"category":"LOGIN",
+ "last_edited_by":"USER1","created_at":"2024-01-03T10:00:00Z","updated_at":"2026-09-01T08:30:00.123Z",
+ "additional_information":"ada","favorite":$1,"tags":["code","work/dev"],
+ "urls":[{"label":"website","primary":true,"href":"https://github.com/login"}],
+ "sections":[{"id":"add more"},{"id":"S1","label":"Recovery"}],
+ "fields":[
+  {"id":"username","type":"STRING","purpose":"USERNAME","label":"username","value":"ada","reference":"op://Personal/GitHub/username"},
+  {"id":"password","type":"CONCEALED","purpose":"PASSWORD","label":"password","value":"hunter2","entropy":40.5,
+   "password_details":{"strength":"VERY_GOOD"},"reference":"op://Personal/GitHub/password"},
+  {"id":"notesPlain","type":"STRING","purpose":"NOTES","label":"notesPlain","value":"Two keys, one in the safe.","reference":"op://Personal/GitHub/notesPlain"},
+  {"id":"TOTP1","section":{"id":"add more"},"type":"OTP","label":"one-time password",
+   "value":"otpauth://totp/GitHub:ada?secret=JBSWY3DPEHPK3PXP","totp":"123456","reference":"op://Personal/GitHub/add more/one-time password"},
+  {"id":"rc1","section":{"id":"S1","label":"Recovery"},"type":"CONCEALED","label":"recovery code","value":"abc-def"},
+  {"id":"empty1","section":{"id":"S1","label":"Recovery"},"type":"STRING","label":"unused","value":""}]}
+EOF
+}
+
+new_one () {
+    cat <<'EOF'
+{"id":"NEW1","title":"Forum","version":1,"vault":{"id":"VAULT2","name":"Work"},"category":"LOGIN",
+ "created_at":"2026-10-21T10:00:00Z","updated_at":"2026-10-21T10:00:00Z","additional_information":"ada",
+ "fields":[
+  {"id":"username","type":"STRING","purpose":"USERNAME","label":"username","value":"ada"},
+  {"id":"password","type":"CONCEALED","purpose":"PASSWORD","label":"password","value":"G3n3rat3d!"}]}
+EOF
+}
+
+case "$1 $2" in
+    "account list")
+        if [ "$FAKE_OP_MODE" = no-account ]; then echo '[]'; exit 0; fi
+        echo '[{"url":"my.1password.com","email":"ada@example.com","user_uuid":"USER1","account_uuid":"ACCOUNT1"}]'
+        ;;
+    "vault list")
+        signed_in "$@"
+        echo '[{"id":"VAULT1","name":"Personal","content_version":3},{"id":"VAULT2","name":"Work","content_version":7}]'
+        ;;
+    "item list")
+        signed_in "$@"
+        cat <<'EOF'
+[{"id":"ITEM1","title":"GitHub","version":4,"vault":{"id":"VAULT1","name":"Personal"},"category":"LOGIN",
+  "created_at":"2024-01-03T10:00:00Z","updated_at":"2026-09-01T08:30:00.123Z","additional_information":"ada",
+  "favorite":true,"tags":["code","work/dev"],"urls":[{"label":"website","primary":true,"href":"https://github.com/login"}]},
+ {"id":"ITEM2","title":"bank","version":1,"vault":{"id":"VAULT2","name":"Work"},"category":"LOGIN",
+  "created_at":"2023-05-01T10:00:00Z","updated_at":"2025-02-10T10:00:00Z","additional_information":"ada.l",
+  "urls":[{"href":"https://bank.example"},{"primary":true,"href":"https://www.bank.example/login"}]},
+ {"id":"ITEM3","title":"Home Wi-Fi","version":2,"vault":{"id":"VAULT1","name":"Personal"},"category":"WIRELESS_ROUTER",
+  "created_at":"2022-01-01T10:00:00Z","updated_at":"2026-10-01T10:00:00Z"},
+ {"id":"ITEM4","title":"Server notes","version":9,"vault":{"id":"VAULT2","name":"Work"},"category":"SECURE_NOTE",
+  "created_at":"2021-01-01T10:00:00Z","updated_at":"2024-03-03T10:00:00Z","tags":["ops"]}]
+EOF
+        ;;
+    "item get")
+        signed_in "$@"
+        case "$3" in
+            ITEM1) item_one true ;;
+            NEW1) new_one ;;
+            *) echo "[ERROR] 2026/10/21 12:00:00 \"$3\" isn't an item." >&2; exit 1 ;;
+        esac
+        ;;
+    "item edit")
+        signed_in "$@"
+        case "$*" in *--favorite=false*) item_one false ;; *) item_one true ;; esac
+        ;;
+    "item create")
+        signed_in "$@"
+        cat > "${FAKE_OP_STDIN:-/dev/null}"
+        new_one
+        ;;
+    "item delete")
+        signed_in "$@"
+        ;;
+    "read --no-newline")
+        signed_in "$@"
+        case "$3" in
+            op://VAULT1/ITEM1/password) printf '%s' hunter2 ;;
+            "op://VAULT1/ITEM1/add more/TOTP1?attribute=otp") printf '%s' 123456 ;;
+            op://VAULT1/ITEM1/S1/rc1) printf '%s' abc-def ;;
+            op://VAULT2/NEW1/password) printf '%s' 'G3n3rat3d!' ;;
+            *) echo "[ERROR] 2026/10/21 12:00:00 could not read secret '$3'" >&2; exit 1 ;;
+        esac
+        ;;
+    "signin --raw")
+        if [ "$FAKE_OP_MODE" = password ]; then
+            printf 'Enter the password for ada@example.com at my.1password.com: '
+            read -r password
+            if [ "$password" = "correct horse" ]; then
+                echo TOKENtokenTOKENtoken123
+            else
+                echo '[ERROR] 2026/10/21 12:00:00 Authentication: (401) Unauthorized, You aren'"'"'t authorized.'
+                exit 1
+            fi
+        fi
+        ;;
+    "signout "*)
+        ;;
+    *)
+        echo "[ERROR] 2026/10/21 12:00:00 unknown command \"$1 $2\"" >&2
+        exit 1
+        ;;
+esac
