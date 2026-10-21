@@ -80,7 +80,7 @@ nil uses the first account op knows."
   :type 'string)
 
 (defcustom lispm-1password-install-command
-  (when (eq system-type 'darwin) "brew install 1password-cli")
+  (when (eq system-type 'darwin) "brew install --cask 1password-cli")
   "The command installing op, shown while it is missing; nil for none."
   :type '(choice (const :tag "None" nil) string))
 

@@ -12,8 +12,9 @@ as a terminal would.
 
 * What it needs
 
-- *op*, 1Password's command-line tool: =brew install 1password-cli= on macOS, or as [[https://developer.1password.com/docs/cli/get-started/][1Password's
-  guide]] says.  While it is missing, the window says so, with the command.
+- *op*, 1Password's command-line tool: =brew install --cask 1password-cli= on macOS, or as
+  [[https://developer.1password.com/docs/cli/get-started/][1Password's guide]] says.  In LispM Desktop, the App Store installs it with the application;
+  while it is missing, the window says so, with the command.
 - *An account op knows.*  With the 1Password app, open Settings, then Developer, and turn on
   /Integrate with 1Password CLI/: op then asks the app to unlock, with Touch ID or the app's
   password, and knows its accounts.  Without the app, add the account in a terminal with

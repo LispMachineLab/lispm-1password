@@ -123,11 +123,11 @@
   "Without op, 1Password says how to install it."
   (lispm-1password-test--with-op nil
     (let ((lispm-1password-program "lispm-1password-no-such-op")
-          (lispm-1password-install-command "brew install 1password-cli"))
+          (lispm-1password-install-command "brew install --cask 1password-cli"))
       (lispm-1password-reload)
       (should (eq lispm-1password-state 'missing))
       (should (lispm-1password--page-p))
-      (should (string-search "brew install 1password-cli" (lispm-1password--page-text)))
+      (should (string-search "brew install --cask 1password-cli" (lispm-1password--page-text)))
       (should (assoc "Copy Command" (lispm-1password--page-buttons))))))
 
 (ert-deftest lispm-1password-test-open ()
