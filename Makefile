@@ -1,10 +1,5 @@
 EMACS ?= emacs
-# lisp/ of LispM Desktop (which needs LispM Browser's), checkouts beside
-# this one by default.  1Password needs neither; with them on the load
-# path, the test of how it works with the desktop runs too.
-LISPM_DESKTOP ?= ../lispm-desktop/lisp
-LISPM_BROWSER ?= ../lispm-browser/lisp
-LOAD_PATH = -L . $(foreach dir,$(wildcard $(LISPM_DESKTOP) $(LISPM_BROWSER)),-L $(dir))
+LOAD_PATH = -L .
 
 FILES = lispm-1password.el lispm-1password-ui.el
 

@@ -45,7 +45,10 @@ secret, =n= and =p= go from field to field, and =q= goes back to the list.
 
 In LispM Desktop, the App Store's 1Password opens in a window of its own, with buttons for its
 main commands, the vault and kind shown under them, and a page saying what to do while op is
-missing or 1Password is locked.
+missing or 1Password is locked.  The desktop dresses it from its own side, with what 1Password
+says of itself: ~lispm-1password-ready-p~, ~-item-p~, ~-whole-p~ and ~-revealed-p~ for the
+buttons, ~-filter-label~, ~-status~ and ~-item-status~ for what the window says, ~-page-p~,
+~-page-text~ and ~-page-buttons~ for its page.  1Password knows nothing of the desktop.
 
 * Secrets
 
@@ -66,8 +69,8 @@ missing or 1Password is locked.
 
 =make test compile= runs the tests and byte-compiles the files, warnings as errors.  The tests
 run [[file:test/fake-op][test/fake-op]] in place of op, which answers as op does from two vaults of its own: no vault is
-read, and nothing signed in to.  With LispM Desktop's =lisp/= beside this checkout, or named by
-~LISPM_DESKTOP~, the test of the desktop's window runs too.
+read, and nothing signed in to.  A test checks that no file of 1Password but the tests names
+LispM Desktop's code.
 
 * License
 

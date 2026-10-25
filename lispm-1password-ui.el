@@ -41,11 +41,16 @@
 ;; An item's window has the same keys, and RET there copies the field
 ;; on its line, r shows its secret, and q goes back to the list.
 ;;
-;; In LispM Desktop, the App Store's 1Password opens it in a window of
-;; its own, with buttons for its main commands, and a page saying what
-;; to do while op is missing or 1Password is locked.  The page follows
-;; what op answers from LispM Desktop 0.4.1, which shows it anew when
-;; the buffer is written outside a command.
+;; A frontend dresses the windows from its own side with what they say
+;; of themselves: `lispm-1password-ready-p', `lispm-1password-item-p',
+;; `lispm-1password-whole-p' and `lispm-1password-revealed-p' for its
+;; buttons, `lispm-1password-filter-label', `lispm-1password-status' and
+;; `lispm-1password-item-status' for what it says of them, and
+;; `lispm-1password-page-p', `lispm-1password-page-text' and
+;; `lispm-1password-page-buttons' for the page shown while there is no
+;; list.  LispM Desktop, whose App Store installs 1Password, opens it in
+;; a window of its own, with buttons for its main commands, that page
+;; drawn over the buffer.
 
 ;;; Code:
 
@@ -55,8 +60,6 @@
 (require 'browse-url)
 (require 'iso8601)
 (require 'lispm-1password)
-
-(declare-function lispm-desktop-app-ui-define "lispm-desktop-app-ui" (key &rest properties))
 
 (defface lispm-1password-title '((t :inherit bold :height 1.4))
   "Face of an item's title, atop its window."
@@ -154,7 +157,7 @@
   (or (plist-get (seq-find (lambda (vault) (equal (plist-get vault :id) id)) lispm-1password-vaults) :name)
       "?"))
 
-(defun lispm-1password--filter-label ()
+(defun lispm-1password-filter-label ()
   "Return what the list shows when it shows some of the items only, or nil."
   (when (lispm-1password-filtered-p)
     (string-join (delq nil (list (and lispm-1password--vault (lispm-1password--vault-name lispm-1password--vault))
@@ -223,16 +226,17 @@
 
 (defun lispm-1password--print ()
   "Write the list's buffer anew: the items, or, while there are none to
-list, what the page says, and its buttons.  In LispM Desktop, the page
-is drawn over the buffer, and drawn anew as the buffer is written: the
-column names, aligned with display properties, would show it twice."
-  (if (not (lispm-1password--page-p))
+list, what the page says, and its buttons.  A frontend may draw the
+page over the buffer, and anew as the buffer is written, as LispM
+Desktop does: the column names, aligned with display properties, would
+show it twice."
+  (if (not (lispm-1password-page-p))
       (progn (tabulated-list-print t)
              (lispm-1password--onto-an-item))
     (let ((inhibit-read-only t))
       (erase-buffer)
-      (insert "\n" (lispm-1password--page-text) "\n\n")
-      (pcase-dolist (`(,label ,command) (lispm-1password--page-buttons))
+      (insert "\n" (lispm-1password-page-text) "\n\n")
+      (pcase-dolist (`(,label ,command) (lispm-1password-page-buttons))
         (insert-text-button label 'action (lambda (_) (call-interactively command)) 'follow-link t)
         (insert "  "))
       (insert "\n")
@@ -251,7 +255,7 @@ at point."
 
 (add-hook 'lispm-1password-changed-hook #'lispm-1password--refresh)
 
-(defun lispm-1password--status ()
+(defun lispm-1password-status ()
   "What the list's window says at its bottom."
   (when (eq lispm-1password-state 'ready)
     (let ((shown (seq-count #'lispm-1password--shown-p lispm-1password-items))
@@ -263,7 +267,7 @@ at point."
 
 ;;;; The page while there is no list
 
-(defun lispm-1password--page-p ()
+(defun lispm-1password-page-p ()
   "Return non-nil while 1Password has no items to list."
   (not (and lispm-1password-items (memq lispm-1password-state '(ready loading)))))
 
@@ -275,7 +279,7 @@ at point."
       (fill-region (point-min) (point-max)))
     (buffer-string)))
 
-(defun lispm-1password--page-text ()
+(defun lispm-1password-page-text ()
   "Return what the page says, by where 1Password stands."
   (pcase lispm-1password-state
     ('missing
@@ -297,7 +301,7 @@ at point."
     ('ready "No items yet.")
     (_ "Opening your vaults…\nIf 1Password asks, unlock it there.")))
 
-(defun lispm-1password--page-buttons ()
+(defun lispm-1password-page-buttons ()
   "Return the page's buttons, by where 1Password stands."
   (pcase lispm-1password-state
     ('missing `(,@(when lispm-1password-install-command
@@ -336,14 +340,14 @@ signal an error."
                               (tabulated-list-get-id)))
       (user-error "No item here")))
 
-(defun lispm-1password--item-p ()
+(defun lispm-1password-item-p ()
   "Return non-nil when there is an item at point, or shown."
   (ignore-errors (lispm-1password--current-item)))
 
-(defun lispm-1password--whole-p (test)
+(defun lispm-1password-whole-p (test)
   "Return non-nil when the item shown, read whole, has a field TEST finds;
 and when the item at point is not read yet."
-  (when-let* ((item (lispm-1password--item-p)))
+  (when-let* ((item (lispm-1password-item-p)))
     (or (not (plist-get item :whole)) (funcall test item))))
 
 (defun lispm-1password-open-item ()
@@ -397,7 +401,7 @@ which, when it has none."
 
 (defun lispm-1password--favorite-p ()
   "Return non-nil when the current item is a favorite."
-  (plist-get (lispm-1password--item-p) :favorite))
+  (plist-get (lispm-1password-item-p) :favorite))
 
 (defun lispm-1password-archive ()
   "Move the item to the Archive, once agreed to."
@@ -549,36 +553,36 @@ searched for or not."
   "g" #'lispm-1password-reload
   "L" #'lispm-1password-lock)
 
-(defun lispm-1password--ready-p ()
+(defun lispm-1password-ready-p ()
   "Return non-nil once the vaults are read."
   (eq lispm-1password-state 'ready))
 
 (easy-menu-define lispm-1password-menu lispm-1password-mode-map
   "1Password's menu."
   '("1Password"
-    ["New Login…" lispm-1password-new :active (lispm-1password--ready-p)]
-    ["Open" lispm-1password-open-item :active (lispm-1password--item-p)]
+    ["New Login…" lispm-1password-new :active (lispm-1password-ready-p)]
+    ["Open" lispm-1password-open-item :active (lispm-1password-item-p)]
     "---"
-    ["Copy Username" lispm-1password-copy-username :active (lispm-1password--item-p)]
-    ["Copy Password" lispm-1password-copy-password :active (lispm-1password--item-p)]
-    ["Copy One-Time Code" lispm-1password-copy-code :active (lispm-1password--item-p)]
+    ["Copy Username" lispm-1password-copy-username :active (lispm-1password-item-p)]
+    ["Copy Password" lispm-1password-copy-password :active (lispm-1password-item-p)]
+    ["Copy One-Time Code" lispm-1password-copy-code :active (lispm-1password-item-p)]
     ["Open Website" lispm-1password-open-website
-     :active (plist-get (lispm-1password--item-p) :urls)]
-    ["Open in 1Password" lispm-1password-open-in-app :active (lispm-1password--item-p)]
+     :active (plist-get (lispm-1password-item-p) :urls)]
+    ["Open in 1Password" lispm-1password-open-in-app :active (lispm-1password-item-p)]
     "---"
     ["Favorite" lispm-1password-toggle-favorite :style toggle :selected (lispm-1password--favorite-p)
-     :active (lispm-1password--item-p)]
-    ["Move to Archive…" lispm-1password-archive :active (lispm-1password--item-p)]
+     :active (lispm-1password-item-p)]
+    ["Move to Archive…" lispm-1password-archive :active (lispm-1password-item-p)]
     "---"
     ["Read Again" lispm-1password-reload]
-    ["Lock" lispm-1password-lock :active (lispm-1password--ready-p)]))
+    ["Lock" lispm-1password-lock :active (lispm-1password-ready-p)]))
 
 (easy-menu-define lispm-1password-view-menu lispm-1password-mode-map
   "1Password's View menu."
   '("View"
     ["All Items" lispm-1password-show-all :style radio :selected (not (lispm-1password-filtered-p))]
     ["Favorites" lispm-1password-toggle-favorites :style toggle :selected lispm-1password--favorites]
-    ["Search…" lispm-1password-search :active (lispm-1password--ready-p)]
+    ["Search…" lispm-1password-search :active (lispm-1password-ready-p)]
     "---"
     ("Vault" :filter lispm-1password--vault-items)
     ("Kind" :filter lispm-1password--kind-items)))
@@ -652,7 +656,7 @@ one is shown, conceal it.  It is concealed again after
                                              (lispm-1password-conceal)))))))
                   (lispm-1password--render)))))))))
 
-(defun lispm-1password--revealed-p ()
+(defun lispm-1password-revealed-p ()
   "Return non-nil while the item's window shows a secret."
   (and (derived-mode-p 'lispm-1password-item-mode) lispm-1password--revealed t))
 
@@ -828,7 +832,7 @@ and is not the notes."
       (lispm-1password--read-shown))
     (switch-to-buffer buffer)))
 
-(defun lispm-1password--item-status ()
+(defun lispm-1password-item-status ()
   "What an item's window says at its bottom."
   (when-let* ((item (lispm-1password-find lispm-1password--shown)))
     (list (plist-get item :vault)
@@ -859,9 +863,9 @@ and is not the notes."
     ["Copy Username" lispm-1password-copy-username]
     ["Copy Password" lispm-1password-copy-password]
     ["Copy One-Time Code" lispm-1password-copy-code]
-    ["Show Secret" lispm-1password-reveal :style toggle :selected (lispm-1password--revealed-p)]
+    ["Show Secret" lispm-1password-reveal :style toggle :selected (lispm-1password-revealed-p)]
     "---"
-    ["Open Website" lispm-1password-open-website :active (plist-get (lispm-1password--item-p) :urls)]
+    ["Open Website" lispm-1password-open-website :active (plist-get (lispm-1password-item-p) :urls)]
     ["Open in 1Password" lispm-1password-open-in-app]
     "---"
     ["Favorite" lispm-1password-toggle-favorite :style toggle :selected (lispm-1password--favorite-p)]
@@ -885,47 +889,6 @@ The vaults are read first, and 1Password unlocked if need be."
   (unless (memq lispm-1password-state '(ready loading unlocking))
     (lispm-1password-reload))
   (lispm-1password--refresh))
-
-;;;; In LispM Desktop
-
-(defun lispm-1password--desktop-setup ()
-  "Name the list's columns in the buffer: in LispM Desktop, the strip of
-buttons takes the window's header line."
-  (setq-local tabulated-list-use-header-line nil)
-  (tabulated-list-init-header)
-  (lispm-1password--print))
-
-(with-eval-after-load 'lispm-desktop-app-ui
-  (lispm-desktop-app-ui-define
-   'lispm-1password-mode
-   :title "1Password"
-   :list t
-   :setup #'lispm-1password--desktop-setup
-   :buttons `(("New…" lispm-1password-new lispm-1password--ready-p)
-              ("Open" lispm-1password-open-item lispm-1password--item-p)
-              ("Copy Password" lispm-1password-copy-password lispm-1password--item-p)
-              ("Copy Code" lispm-1password-copy-code lispm-1password--item-p)
-              ("Search…" lispm-1password-search lispm-1password--ready-p)
-              ("Show All" lispm-1password-show-all lispm-1password-filtered-p))
-   :label #'lispm-1password--filter-label
-   :status #'lispm-1password--status
-   :empty '(lispm-1password--page-p lispm-1password--page-text lispm-1password--page-buttons))
-  (lispm-desktop-app-ui-define
-   'lispm-1password-item-mode
-   :title "1Password"
-   :prose t
-   :buttons `(("Back" lispm-1password-back)
-              ("Copy Username" lispm-1password-copy-username
-               ,(lambda () (lispm-1password--whole-p #'lispm-1password-username-field)))
-              ("Copy Password" lispm-1password-copy-password
-               ,(lambda () (lispm-1password--whole-p #'lispm-1password-password-field)))
-              ("Copy Code" lispm-1password-copy-code
-               ,(lambda () (lispm-1password--whole-p #'lispm-1password-code-field)))
-              (,(lambda () (if lispm-1password--revealed "Conceal" "Reveal")) lispm-1password-reveal
-               ,(lambda () (lispm-1password--whole-p #'lispm-1password-password-field)))
-              ("Website" lispm-1password-open-website
-               ,(lambda () (plist-get (lispm-1password--item-p) :urls))))
-   :status #'lispm-1password--item-status))
 
 (provide 'lispm-1password-ui)
 ;;; lispm-1password-ui.el ends here
