@@ -19,6 +19,8 @@ as a terminal would.
   /Integrate with 1Password CLI/: op then asks the app to unlock, with Touch ID or the app's
   password, and knows its accounts.  Without the app, add the account in a terminal with
   =op account add=; unlocking then asks its password, in the minibuffer, and hands it to op.
+- *lispm-kit*, [[https://github.com/LispMachineLab/lispm-kit][LispM Kit]], with which its windows declare each command once: its key, its menu
+  item and, for the main ones, the words of a button.  The App Store installs it first.
 
 * Using it
 
@@ -70,7 +72,7 @@ buttons, ~-filter-label~, ~-status~ and ~-item-status~ for what the window says,
 =make test compile= runs the tests and byte-compiles the files, warnings as errors.  The tests
 run [[file:test/fake-op][test/fake-op]] in place of op, which answers as op does from two vaults of its own: no vault is
 read, and nothing signed in to.  A test checks that no file of 1Password but the tests names
-LispM Desktop's code.
+LispM Desktop's code.  LispM Kit is a checkout beside this one, or named by ~LISPM_KIT~.
 
 * License
 

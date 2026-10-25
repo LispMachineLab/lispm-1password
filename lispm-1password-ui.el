@@ -59,6 +59,7 @@
 (require 'tabulated-list)
 (require 'browse-url)
 (require 'iso8601)
+(require 'lispm-kit-commands)
 (require 'lispm-1password)
 
 (defface lispm-1password-title '((t :inherit bold :height 1.4))
@@ -532,60 +533,46 @@ searched for or not."
   (setq buffer-display-table (or (copy-sequence buffer-display-table) (make-display-table)))
   (set-display-table-slot buffer-display-table 'truncation ?…))
 
-(defvar-keymap lispm-1password-mode-map
-  :doc "Keys of 1Password's list."
-  :parent tabulated-list-mode-map
-  "RET" #'lispm-1password-open-item
-  "s" #'lispm-1password-search
-  "/" #'lispm-1password-search
-  "v" #'lispm-1password-show-vault
-  "k" #'lispm-1password-show-kind
-  "*" #'lispm-1password-toggle-favorites
-  "a" #'lispm-1password-show-all
-  "u" #'lispm-1password-copy-username
-  "c" #'lispm-1password-copy-password
-  "t" #'lispm-1password-copy-code
-  "w" #'lispm-1password-open-website
-  "o" #'lispm-1password-open-in-app
-  "f" #'lispm-1password-toggle-favorite
-  "d" #'lispm-1password-archive
-  "+" #'lispm-1password-new
-  "g" #'lispm-1password-reload
-  "L" #'lispm-1password-lock)
-
 (defun lispm-1password-ready-p ()
   "Return non-nil once the vaults are read."
   (eq lispm-1password-state 'ready))
 
-(easy-menu-define lispm-1password-menu lispm-1password-mode-map
-  "1Password's menu."
-  '("1Password"
-    ["New Login…" lispm-1password-new :active (lispm-1password-ready-p)]
-    ["Open" lispm-1password-open-item :active (lispm-1password-item-p)]
-    "---"
-    ["Copy Username" lispm-1password-copy-username :active (lispm-1password-item-p)]
-    ["Copy Password" lispm-1password-copy-password :active (lispm-1password-item-p)]
-    ["Copy One-Time Code" lispm-1password-copy-code :active (lispm-1password-item-p)]
-    ["Open Website" lispm-1password-open-website
-     :active (plist-get (lispm-1password-item-p) :urls)]
-    ["Open in 1Password" lispm-1password-open-in-app :active (lispm-1password-item-p)]
-    "---"
-    ["Favorite" lispm-1password-toggle-favorite :style toggle :selected (lispm-1password--favorite-p)
-     :active (lispm-1password-item-p)]
-    ["Move to Archive…" lispm-1password-archive :active (lispm-1password-item-p)]
-    "---"
-    ["Read Again" lispm-1password-reload]
-    ["Lock" lispm-1password-lock :active (lispm-1password-ready-p)]))
-
-(easy-menu-define lispm-1password-view-menu lispm-1password-mode-map
-  "1Password's View menu."
-  '("View"
-    ["All Items" lispm-1password-show-all :style radio :selected (not (lispm-1password-filtered-p))]
-    ["Favorites" lispm-1password-toggle-favorites :style toggle :selected lispm-1password--favorites]
-    ["Search…" lispm-1password-search :active (lispm-1password-ready-p)]
-    "---"
-    ("Vault" :filter lispm-1password--vault-items)
-    ("Kind" :filter lispm-1password--kind-items)))
+;; Each command once: its keys, its menu item and, for the main ones, the
+;; words of a button, for an interface showing them as buttons.
+(lispm-kit-define-commands lispm-1password-mode
+  (lispm-1password-show-vault :key "v")
+  (lispm-1password-show-kind :key "k")
+  :menu "1Password"
+  (lispm-1password-new :key "+" :label "New Login…" :button "New…" :enabled (lispm-1password-ready-p))
+  (lispm-1password-open-item :key "RET" :label "Open" :button t :enabled (lispm-1password-item-p))
+  "---"
+  (lispm-1password-copy-username :key "u" :label "Copy Username" :enabled (lispm-1password-item-p))
+  (lispm-1password-copy-password :key "c" :label "Copy Password" :button t :enabled (lispm-1password-item-p))
+  (lispm-1password-copy-code
+   :key "t" :label "Copy One-Time Code" :button "Copy Code" :enabled (lispm-1password-item-p))
+  (lispm-1password-open-website
+   :key "w" :label "Open Website" :enabled (plist-get (lispm-1password-item-p) :urls))
+  (lispm-1password-open-in-app :key "o" :label "Open in 1Password" :enabled (lispm-1password-item-p))
+  "---"
+  (lispm-1password-toggle-favorite
+   :key "f" :label "Favorite" :style toggle :selected (lispm-1password--favorite-p)
+   :enabled (lispm-1password-item-p))
+  (lispm-1password-archive :key "d" :label "Move to Archive…" :enabled (lispm-1password-item-p))
+  "---"
+  (lispm-1password-reload :key "g" :label "Read Again")
+  (lispm-1password-lock :key "L" :label "Lock" :enabled (lispm-1password-ready-p))
+  :menu "View"
+  ;; Before Show All among the buttons, after Favorites in the menu.
+  (lispm-1password-search :key ("s" "/") :label "Search…" :button t :enabled (lispm-1password-ready-p))
+  (lispm-1password-show-all
+   :key "a" :label "All Items" :button "Show All" :style radio
+   :selected (not (lispm-1password-filtered-p)) :enabled (lispm-1password-filtered-p))
+  (lispm-1password-toggle-favorites
+   :key "*" :label "Favorites" :style toggle :selected lispm-1password--favorites)
+  lispm-1password-search
+  "---"
+  ("Vault" :filter lispm-1password--vault-items)
+  ("Kind" :filter lispm-1password--kind-items))
 
 (define-derived-mode lispm-1password-mode tabulated-list-mode "1Password"
   "1Password's list: the items of the vaults, one a line, by title.
@@ -838,40 +825,38 @@ and is not the notes."
     (list (plist-get item :vault)
           (and lispm-1password--revealed "Secret shown"))))
 
-(defvar-keymap lispm-1password-item-mode-map
-  :doc "Keys of the window of one of 1Password's items."
-  :parent special-mode-map
-  "RET" #'lispm-1password-copy-at-point
-  "n" #'lispm-1password-next-field
-  "p" #'lispm-1password-previous-field
-  "r" #'lispm-1password-reveal
-  "u" #'lispm-1password-copy-username
-  "c" #'lispm-1password-copy-password
-  "t" #'lispm-1password-copy-code
-  "w" #'lispm-1password-open-website
-  "o" #'lispm-1password-open-in-app
-  "f" #'lispm-1password-toggle-favorite
-  "d" #'lispm-1password-archive
-  "g" #'lispm-1password-read-again
-  "q" #'lispm-1password-back
-  "l" #'lispm-1password-back)
-
-(easy-menu-define lispm-1password-item-menu lispm-1password-item-mode-map
-  "The menu of 1Password's item."
-  '("Item"
-    ["Copy Field" lispm-1password-copy-at-point :active (get-text-property (point) 'lispm-1password-field)]
-    ["Copy Username" lispm-1password-copy-username]
-    ["Copy Password" lispm-1password-copy-password]
-    ["Copy One-Time Code" lispm-1password-copy-code]
-    ["Show Secret" lispm-1password-reveal :style toggle :selected (lispm-1password-revealed-p)]
-    "---"
-    ["Open Website" lispm-1password-open-website :active (plist-get (lispm-1password-item-p) :urls)]
-    ["Open in 1Password" lispm-1password-open-in-app]
-    "---"
-    ["Favorite" lispm-1password-toggle-favorite :style toggle :selected (lispm-1password--favorite-p)]
-    ["Move to Archive…" lispm-1password-archive]
-    "---"
-    ["Back to the List" lispm-1password-back]))
+;; The item's commands, each once, as the list's.
+(lispm-kit-define-commands lispm-1password-item-mode
+  (lispm-1password-back :key ("q" "l") :label "Back to the List" :button "Back")
+  (lispm-1password-next-field :key "n")
+  (lispm-1password-previous-field :key "p")
+  (lispm-1password-read-again :key "g")
+  :menu "Item"
+  (lispm-1password-copy-at-point
+   :key "RET" :label "Copy Field" :enabled (get-text-property (point) 'lispm-1password-field))
+  (lispm-1password-copy-username
+   :key "u" :label "Copy Username" :button t
+   :enabled (lispm-1password-whole-p #'lispm-1password-username-field))
+  (lispm-1password-copy-password
+   :key "c" :label "Copy Password" :button t
+   :enabled (lispm-1password-whole-p #'lispm-1password-password-field))
+  (lispm-1password-copy-code
+   :key "t" :label "Copy One-Time Code" :button "Copy Code"
+   :enabled (lispm-1password-whole-p #'lispm-1password-code-field))
+  (lispm-1password-reveal
+   :key "r" :label "Show Secret" :style toggle :selected (lispm-1password-revealed-p)
+   :button (if (lispm-1password-revealed-p) "Conceal" "Reveal")
+   :enabled (lispm-1password-whole-p #'lispm-1password-password-field))
+  "---"
+  (lispm-1password-open-website
+   :key "w" :label "Open Website" :button "Website" :enabled (plist-get (lispm-1password-item-p) :urls))
+  (lispm-1password-open-in-app :key "o" :label "Open in 1Password")
+  "---"
+  (lispm-1password-toggle-favorite
+   :key "f" :label "Favorite" :style toggle :selected (lispm-1password--favorite-p))
+  (lispm-1password-archive :key "d" :label "Move to Archive…")
+  "---"
+  lispm-1password-back)
 
 (define-derived-mode lispm-1password-item-mode special-mode "1Password Item"
   "One of 1Password's items: its fields, websites, notes and tags.
