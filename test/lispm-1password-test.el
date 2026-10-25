@@ -126,9 +126,9 @@
           (lispm-1password-install-command "brew install --cask 1password-cli"))
       (lispm-1password-reload)
       (should (eq lispm-1password-state 'missing))
-      (should (lispm-1password--page-p))
-      (should (string-search "brew install --cask 1password-cli" (lispm-1password--page-text)))
-      (should (assoc "Copy Command" (lispm-1password--page-buttons))))))
+      (should (lispm-1password-page-p))
+      (should (string-search "brew install --cask 1password-cli" (lispm-1password-page-text)))
+      (should (assoc "Copy Command" (lispm-1password-page-buttons))))))
 
 (ert-deftest lispm-1password-test-open ()
   "The vaults and their items are read, for the first account."
@@ -149,15 +149,15 @@
     ;; Once known, the account is named to op.
     (should (string-match-p "\\`item list --format json --account ACCOUNT1\\'"
                             (car (last (lispm-1password-test--calls)))))
-    (should-not (lispm-1password--page-p))))
+    (should-not (lispm-1password-page-p))))
 
 (ert-deftest lispm-1password-test-no-account ()
   "Without an account, the page says to turn on the app's integration."
   (lispm-1password-test--with-op "no-account"
     (lispm-1password-reload)
     (lispm-1password-test--wait (lambda () (eq lispm-1password-state 'no-account)))
-    (should (string-search "Integrate with 1Password CLI" (lispm-1password--page-text)))
-    (should (assoc "Open 1Password" (lispm-1password--page-buttons)))))
+    (should (string-search "Integrate with 1Password CLI" (lispm-1password-page-text)))
+    (should (assoc "Open 1Password" (lispm-1password-page-buttons)))))
 
 (ert-deftest lispm-1password-test-locked ()
   "op to be signed in to leaves 1Password locked, with Unlock."
@@ -165,8 +165,8 @@
     (lispm-1password-reload)
     (lispm-1password-test--wait (lambda () (eq lispm-1password-state 'locked)))
     (should (string-prefix-p "You are not currently signed in" lispm-1password-message))
-    (should (string-prefix-p "1Password is locked." (lispm-1password--page-text)))
-    (should (equal (lispm-1password--page-buttons) '(("Unlock" lispm-1password-unlock))))))
+    (should (string-prefix-p "1Password is locked." (lispm-1password-page-text)))
+    (should (equal (lispm-1password-page-buttons) '(("Unlock" lispm-1password-unlock))))))
 
 (ert-deftest lispm-1password-test-unlock-with-password ()
   "Without the app, the password is asked and handed to op, which gives
@@ -345,17 +345,17 @@ favorites and words."
   (lispm-1password-test--with-op nil
     (lispm-1password-test--open)
     (should (equal (lispm-1password-test--titles) '("bank" "GitHub" "Home Wi-Fi" "Server notes")))
-    (should-not (lispm-1password--filter-label))
+    (should-not (lispm-1password-filter-label))
     (with-current-buffer (lispm-1password--list-buffer)
-      (should (equal (lispm-1password--status) '("4 items" "ada@example.com"))))
+      (should (equal (lispm-1password-status) '("4 items" "ada@example.com"))))
     (lispm-1password-show-vault "VAULT2")
     (should (equal (lispm-1password-test--titles) '("bank" "Server notes")))
-    (should (equal (lispm-1password--filter-label) "Work"))
+    (should (equal (lispm-1password-filter-label) "Work"))
     (lispm-1password-show-kind "SECURE_NOTE")
     (should (equal (lispm-1password-test--titles) '("Server notes")))
-    (should (equal (lispm-1password--filter-label) "Work · Secure Note"))
+    (should (equal (lispm-1password-filter-label) "Work · Secure Note"))
     (with-current-buffer (lispm-1password--list-buffer)
-      (should (equal (car (lispm-1password--status)) "1 of 4 items")))
+      (should (equal (car (lispm-1password-status)) "1 of 4 items")))
     (lispm-1password-show-all)
     (lispm-1password-toggle-favorites)
     (should (equal (lispm-1password-test--titles) '("GitHub")))
@@ -365,7 +365,7 @@ favorites and words."
     (should (equal (lispm-1password-test--titles) '("bank" "GitHub")))
     (setq lispm-1password--search "ops")
     (should (equal (lispm-1password-test--titles) '("Server notes")))
-    (should (equal (lispm-1password--filter-label) "“ops”"))
+    (should (equal (lispm-1password-filter-label) "“ops”"))
     (lispm-1password-show-all)
     (should-not (lispm-1password-filtered-p))
     (should (equal (lispm-1password-category-name "WIRELESS_ROUTER") "Wireless Router"))
@@ -398,8 +398,8 @@ favorites and words."
         (should (equal (plist-get (lispm-1password--field-at-point) :id) "password"))
         (lispm-1password-reveal)
         (lispm-1password-test--wait (lambda () (string-search "hunter2" (buffer-string))))
-        (should (equal (lispm-1password--item-status) '("Personal" "Secret shown")))
-        (should (lispm-1password--revealed-p))
+        (should (equal (lispm-1password-item-status) '("Personal" "Secret shown")))
+        (should (lispm-1password-revealed-p))
         (lispm-1password-conceal)
         (should-not (string-search "hunter2" (buffer-string)))
         (should-not lispm-1password--revealed)
@@ -422,12 +422,12 @@ favorites and words."
 (ert-deftest lispm-1password-test-page-while-locked ()
   "Locked, the list is empty and the page is shown; read, the list."
   (lispm-1password-test--with-op nil
-    (should (lispm-1password--page-p))
-    (should (string-prefix-p "Opening your vaults" (lispm-1password--page-text)))
+    (should (lispm-1password-page-p))
+    (should (string-prefix-p "Opening your vaults" (lispm-1password-page-text)))
     (lispm-1password-test--open)
-    (should-not (lispm-1password--page-p))
+    (should-not (lispm-1password-page-p))
     (lispm-1password-lock)
-    (should (lispm-1password--page-p))
+    (should (lispm-1password-page-p))
     ;; Without LispM Desktop, the buffer says it, with its buttons.
     (with-current-buffer (lispm-1password--list-buffer)
       (should-not (text-property-not-all (point-min) (point-max) 'tabulated-list-id nil))
@@ -435,19 +435,16 @@ favorites and words."
       (goto-char (point-min))
       (should (equal (button-label (next-button (point))) "Unlock")))))
 
-;;;; In LispM Desktop
+;;;; Standing alone
 
-(ert-deftest lispm-1password-test-desktop ()
-  "In LispM Desktop, both windows have the application's interface."
-  (skip-unless (locate-library "lispm-desktop-app-ui"))
-  (require 'lispm-desktop-app-ui)
-  (dolist (mode '(lispm-1password-mode lispm-1password-item-mode))
-    (should (equal (plist-get (alist-get mode lispm-desktop-app-ui-skins) :title) "1Password")))
-  (let ((list (alist-get 'lispm-1password-mode lispm-desktop-app-ui-skins)))
-    (should (equal (plist-get list :empty)
-                   '(lispm-1password--page-p lispm-1password--page-text lispm-1password--page-buttons)))
-    (dolist (button (plist-get list :buttons))
-      (should (commandp (nth 1 button))))))
+(ert-deftest lispm-1password-test-knows-no-desktop ()
+  "1Password stands alone: none of its files but the tests names LispM
+Desktop's code, which dresses its windows from its own side."
+  (dolist (file (directory-files (file-name-directory (locate-library "lispm-1password")) t "\\.el\\'"))
+    (with-temp-buffer
+      (insert-file-contents file)
+      (should-not (and (re-search-forward "lispm-desktop\\|platinum" nil t)
+                       (format "%s:%d" (file-name-nondirectory file) (line-number-at-pos)))))))
 
 (provide 'lispm-1password-test)
 ;;; lispm-1password-test.el ends here
