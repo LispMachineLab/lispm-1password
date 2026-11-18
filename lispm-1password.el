@@ -4,8 +4,8 @@
 
 ;; Author: Ryan.K
 ;; URL: https://github.com/LispMachineLab/lispm-1password
-;; Version: 0.1.0
-;; Package-Requires: ((emacs "30.1") (lispm-kit "0.1.0"))
+;; Version: 0.1.1
+;; Package-Requires: ((emacs "30.1") (lispm-ui "0.8.0"))
 ;; Keywords: tools, convenience
 ;; SPDX-License-Identifier: AGPL-3.0-or-later
 
