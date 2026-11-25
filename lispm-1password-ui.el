@@ -60,6 +60,8 @@
 (require 'browse-url)
 (require 'iso8601)
 (require 'lispm-kit-commands)
+(require 'lispm-ui-ask)
+(require 'lispm-ui-form)
 (require 'lispm-1password)
 
 (defface lispm-1password-title '((t :inherit bold :height 1.4))
@@ -408,32 +410,67 @@ which, when it has none."
   "Move the item to the Archive, once agreed to."
   (interactive)
   (let ((item (lispm-1password--current-item)))
-    (when (y-or-n-p (format "Move %s to the Archive? " (plist-get item :title)))
+    (when (lispm-ui-confirm (format "Move %s to the Archive?" (plist-get item :title))
+                            nil "Archive")
       (lispm-1password-archive-item item (lambda ()
                                            (message "Moved %s to the Archive" (plist-get item :title)))))))
 
 (defun lispm-1password--read-vault (prompt &optional all)
   "Read the name of a vault with PROMPT; return its ID.
 With ALL, All Vaults may be chosen too, returning nil."
-  (let* ((vaults (mapcar (lambda (vault) (cons (plist-get vault :name) (plist-get vault :id)))
+  (let* ((vaults (mapcar (lambda (vault) (cons (plist-get vault :id) (plist-get vault :name)))
                          lispm-1password-vaults))
-         (choices (if all (cons (cons "All Vaults" nil) vaults) vaults)))
+         (choices (if all (cons (cons nil "All Vaults") vaults) vaults)))
     (unless choices
       (user-error "No vault to choose"))
-    (cdr (assoc (completing-read prompt choices nil t nil nil (caar choices)) choices))))
+    (if-let* ((chosen (lispm-ui-choose choices nil nil
+                                       (string-trim-right prompt "[ \t]*:?[ \t]*"))))
+        (car chosen)
+      (signal 'quit nil))))
 
 (defun lispm-1password--read-login ()
   "Read a new login: its title, vault, username, website and password."
   (unless (eq lispm-1password-state 'ready)
     (user-error "1Password is not open"))
-  (let ((title (string-trim (read-string "Title of the login: "))))
-    (when (string-empty-p title)
-      (user-error "A login needs a title"))
-    (let* ((vault (lispm-1password--read-vault "In the vault: "))
-           (username (read-string "Username: "))
-           (url (string-trim (read-string "Website: ")))
-           (password (read-passwd "Password, or nothing to have one generated: " t)))
-      (list title vault username url (if (string-empty-p password) nil password)))))
+  (let ((vaults (mapcar (lambda (vault) (cons (plist-get vault :id) (plist-get vault :name)))
+                        lispm-1password-vaults)))
+    (unless vaults
+      (user-error "No vault to choose"))
+    (if (or (bound-and-true-p lispm-ui-form-modal-function)
+            (lispm-ui-popup-available-p))
+        (let* ((values
+                (lispm-ui-form-modal
+                 "New Login"
+                 `((title :type text :label "Title" :required t)
+                   (vault :type choice :label "Vault" :choices ,vaults :value ,(caar vaults))
+                   (username :type text :label "Username")
+                   (url :type text :label "Website")
+                   (password :type password :label "Password"
+                             :help "Leave empty to generate one")
+                   (confirm :type password :label "Confirm Password"
+                            :validate ,(lambda (val)
+                                         (unless (equal (or val "")
+                                                        (or (lispm-ui-form-value 'password) ""))
+                                           "Passwords do not match"))))
+                 :submit "Create"))
+               (title (string-trim (or (alist-get 'title values) "")))
+               (vault (alist-get 'vault values))
+               (username (or (alist-get 'username values) ""))
+               (url (string-trim (or (alist-get 'url values) "")))
+               (password (alist-get 'password values))
+               (confirm (alist-get 'confirm values)))
+          (when (stringp confirm)
+            (clear-string confirm))
+          (list title vault username url
+                (unless (or (null password) (string-empty-p password)) password)))
+      (let ((title (string-trim (lispm-ui-read-string "Title of the login: "))))
+        (when (string-empty-p title)
+          (user-error "A login needs a title"))
+        (let* ((vault (lispm-1password--read-vault "In the vault: "))
+               (username (lispm-ui-read-string "Username: "))
+               (url (string-trim (lispm-ui-read-string "Website: ")))
+               (password (lispm-ui-read-passwd "Password, or nothing to have one generated: " t)))
+          (list title vault username url (if (string-empty-p password) nil password)))))))
 
 (defun lispm-1password-new (title vault username url password)
   "Create a login TITLE in VAULT, for USERNAME at URL, and open it.
@@ -461,14 +498,13 @@ typed; nothing typed shows them all."
   (interactive)
   (let ((before lispm-1password--search))
     (condition-case nil
-        (minibuffer-with-setup-hook
-            (lambda ()
-              (add-hook 'after-change-functions
-                        (lambda (&rest _)
-                          (setq lispm-1password--search (minibuffer-contents-no-properties))
-                          (lispm-1password--refresh))
-                        nil t))
-          (setq lispm-1password--search (read-from-minibuffer "Search 1Password: " before)))
+        (setq lispm-1password--search
+              (lispm-ui-read-string
+               "Search 1Password: "
+               :initial before
+               :on-change (lambda (text)
+                            (setq lispm-1password--search text)
+                            (lispm-1password--refresh))))
       (quit (setq lispm-1password--search before)))
     (lispm-1password--refresh)
     (when (derived-mode-p 'lispm-1password-mode)
@@ -483,11 +519,13 @@ typed; nothing typed shows them all."
 (defun lispm-1password-show-kind (category)
   "Show the items of the kind op calls CATEGORY only; or with nil, all."
   (interactive
-   (let* ((kinds (mapcar (lambda (category) (cons (lispm-1password-category-name category) category))
+   (let* ((kinds (mapcar (lambda (category) (cons category (lispm-1password-category-name category)))
                          (seq-uniq (mapcar (lambda (item) (plist-get item :category)) lispm-1password-items))))
-          (choices (cons (cons "All Kinds" nil) (seq-sort-by #'car #'string< kinds))))
-     (list (cdr (assoc (completing-read "Show the items of the kind: " choices nil t nil nil "All Kinds")
-                       choices)))))
+          (choices (cons (cons nil "All Kinds") (seq-sort-by #'cdr #'string< kinds))))
+     (if-let* ((chosen (lispm-ui-choose choices lispm-1password--category nil
+                                        "Show the items of the kind")))
+         (list (car chosen))
+       (signal 'quit nil))))
   (setq lispm-1password--category category)
   (lispm-1password--refresh))
 
