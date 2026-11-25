@@ -435,6 +435,70 @@ favorites and words."
       (goto-char (point-min))
       (should (equal (button-label (next-button (point))) "Unlock")))))
 
+(ert-deftest lispm-1password-test-prompts-use-lispm-ui ()
+  "Vault, kind, archive, search, unlock and new-login prompts use `lispm-ui'."
+  (lispm-1password-test--with-op "password"
+    (lispm-1password-reload)
+    (lispm-1password-test--wait (lambda () (eq lispm-1password-state 'locked)))
+    (let ((asked nil))
+      (let ((lispm-ui-form-prompt-function
+             (lambda (prompt &rest opts)
+               (setq asked (list prompt (plist-get opts :password)))
+               (copy-sequence "correct horse"))))
+        (lispm-1password-unlock)
+        (lispm-1password-test--wait (lambda () (eq lispm-1password-state 'ready))))
+      (should (equal (cdr asked) '(t)))
+      (should (string-match-p "password" (car asked)))))
+  (lispm-1password-test--with-op nil
+    (lispm-1password-test--open)
+    ;; Archive confirmation routes via `lispm-ui-alert-function'.
+    (let ((alerts nil)
+          (archived nil))
+      (cl-letf (((symbol-function 'lispm-1password--current-item)
+                 (lambda () (lispm-1password-find "ITEM1")))
+                ((symbol-function 'lispm-1password-archive-item)
+                 (lambda (item _cb) (setq archived (plist-get item :id)))))
+        (let ((lispm-ui-alert-function
+               (lambda (_icon msg _buttons _detail) (push msg alerts) 'agree)))
+          (lispm-1password-archive)))
+      (should (equal archived "ITEM1"))
+      (should (= (length alerts) 1)))
+    ;; Vault and kind choosers distinguish `(nil)' ("All") from `nil' (quit).
+    (let ((lispm-ui-choose-function (lambda (choices &rest _) (list (caar choices)))))
+      (should-not (lispm-1password--read-vault "Show the vault: " t))
+      (call-interactively #'lispm-1password-show-kind)
+      (should-not lispm-1password--category))
+    (let ((lispm-ui-choose-function (lambda (&rest _) nil)))
+      (should (eq (condition-case nil (progn (lispm-1password--read-vault "Show: " t) nil)
+                    (quit 'quitted))
+                  'quitted))
+      (should (eq (condition-case nil
+                      (progn (call-interactively #'lispm-1password-show-kind) nil)
+                    (quit 'quitted))
+                  'quitted)))
+    ;; Live search passes `:on-change' through `lispm-ui' and restores on `quit'.
+    (setq lispm-1password--search "prev")
+    (let* ((seen-on-change nil)
+           (lispm-ui-form-prompt-function
+            (lambda (_prompt &rest opts)
+              (when-let* ((cb (plist-get opts :on-change)))
+                (funcall cb "live")
+                (setq seen-on-change lispm-1password--search))
+              (signal 'quit nil))))
+      (lispm-1password-search)
+      (should (equal seen-on-change "live"))
+      (should (equal lispm-1password--search "prev")))
+    ;; New login opens modal `lispm-ui-form-modal-function'.
+    (let* ((modal-title nil)
+           (lispm-ui-form-modal-function
+            (lambda (title _fields &rest _)
+              (setq modal-title title)
+              `((title . "Forum") (vault . "VAULT2") (username . "ada")
+                (url . "https://example.com") (password . "s3cret") (confirm . ,(copy-sequence "s3cret"))))))
+      (should (equal (lispm-1password--read-login)
+                     '("Forum" "VAULT2" "ada" "https://example.com" "s3cret")))
+      (should (equal modal-title "New Login")))))
+
 ;;;; Standing alone
 
 (ert-deftest lispm-1password-test-knows-no-desktop ()

@@ -5,7 +5,7 @@
 ;; Author: Ryan.K
 ;; URL: https://github.com/LispMachineLab/lispm-1password
 ;; Version: 0.1.1
-;; Package-Requires: ((emacs "30.1") (lispm-ui "0.8.0"))
+;; Package-Requires: ((emacs "30.1") (lispm-ui "0.12.0"))
 ;; Keywords: tools, convenience
 ;; SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -39,7 +39,7 @@
 ;; op asks the 1Password app to unlock, with Touch ID or the app's
 ;; password, once Settings > Developer > Integrate with 1Password CLI
 ;; is on there.  Without the app, an account added with `op account
-;; add' is unlocked with its password, asked in the minibuffer and
+;; add' is unlocked with its password, asked in a password prompt and
 ;; handed to op, never kept.
 ;;
 ;; This file runs op and keeps what it said; lispm-1password-ui.el is
@@ -51,6 +51,7 @@
 (require 'seq)
 (require 'subr-x)
 (require 'url-util)
+(require 'lispm-ui-ask)
 
 (defgroup lispm-1password nil
   "1Password's vaults, through its command-line tool."
@@ -423,7 +424,7 @@ without the app, the account's password is asked here and handed to op."
   "Ask the password op asks for with PROMPT, and hand it to PROCESS."
   (when (process-live-p process)
     (if-let* ((password (condition-case nil
-                            (read-passwd (concat (string-trim prompt) " "))
+                            (lispm-ui-read-passwd (concat (string-trim prompt) " "))
                           (quit nil))))
         (progn (process-send-string process (concat password "\n"))
                (clear-string password))
